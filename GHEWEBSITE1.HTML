@@ -1,0 +1,233 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>My Hub</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#0b1020;color:white;font-family:Arial,sans-serif}
+input,button{padding:12px;border-radius:10px;border:0;margin:5px}
+input{background:#202b42;color:white;width:100%}
+button{background:#7055ed;color:white;font-weight:bold;cursor:pointer}
+button:hover{opacity:.85}
+#login{position:fixed;inset:0;background:#0b1020;display:flex;align-items:center;justify-content:center;z-index:5}
+.loginbox{background:#172139;padding:25px;border-radius:20px;width:90%;max-width:350px;text-align:center}
+header{padding:20px;display:flex;justify-content:space-between;align-items:center}
+header h1{color:#8b75ff}
+.container{max-width:900px;margin:auto;padding:15px}
+.hero{background:linear-gradient(135deg,#6949ed,#258bd8);padding:22px;border-radius:18px;margin-bottom:20px}
+.card{background:#172139;border:1px solid #2b3856;border-radius:15px;padding:15px;overflow-wrap:anywhere}
+.card a{color:#8bbcff}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-top:20px}
+.delete{background:#a93451}
+.empty{text-align:center;color:#9aa9c5;padding:30px}
+</style>
+</head>
+<body>
+
+<div id="login">
+  <div class="loginbox">
+    <h1 style="color:#8b75ff">🗂️ MY HUB</h1>
+    <p>Login to your personal space</p>
+    <input id="user" placeholder="Username">
+    <input id="pass" type="password" placeholder="Password">
+    <button style="width:100%" onclick="login()">LOGIN</button>
+    <p id="error" style="color:#ff7777"></p>
+  </div>
+</div>
+
+<header>
+  <h1>MY HUB</h1>
+  <button onclick="logout()">LOGOUT</button>
+</header>
+
+<div class="container" id="dashboard" style="display:none">
+
+<div class="hero">
+  <h2>Welcome to your Hub ✨</h2>
+  <p>Your links and files, all in one place.</p>
+</div>
+
+<h3>🔗 Add Link</h3>
+<input id="linkName" placeholder="Link name">
+<input id="linkUrl" placeholder="https://example.com">
+<button onclick="addLink()">＋ Save Link</button>
+
+<hr>
+
+<h3>📁 Upload File</h3>
+<input type="file" id="fileInput">
+<button onclick="saveFile()">⬆ Upload File</button>
+
+<hr>
+
+<h3>🔎 Search</h3>
+<input id="search" placeholder="Search..." oninput="render()">
+
+<div class="grid" id="grid"></div>
+
+</div>
+
+<script>
+const USERNAME = "admin";
+const PASSWORD = "1234";
+
+let links = JSON.parse(localStorage.getItem("hubLinks") || "[]");
+let files = JSON.parse(localStorage.getItem("hubFiles") || "[]");
+
+function login(){
+  if(user.value === USERNAME && pass.value === PASSWORD){
+    sessionStorage.setItem("hubLogin","yes");
+    showHub();
+  } else {
+    error.textContent="Wrong username or password!";
+  }
+}
+
+function showHub(){
+  loginScreenHide();
+  dashboard.style.display="block";
+  render();
+}
+
+function loginScreenHide(){
+  document.getElementById("login").style.display="none";
+}
+
+function logout(){
+  sessionStorage.removeItem("hubLogin");
+  dashboard.style.display="none";
+  document.getElementById("login").style.display="flex";
+  pass.value="";
+}
+
+if(sessionStorage.getItem("hubLogin")==="yes"){
+  showHub();
+}
+
+function save(){
+  localStorage.setItem("hubLinks",JSON.stringify(links));
+  localStorage.setItem("hubFiles",JSON.stringify(files));
+}
+
+function addLink(){
+  let name=linkName.value.trim();
+  let url=linkUrl.value.trim();
+
+  if(!name||!url){
+    alert("Enter name and URL!");
+    return;
+  }
+
+  if(!/^https?:\/\//i.test(url)){
+    url="https://"+url;
+  }
+
+  links.push({id:Date.now(),name,url});
+  save();
+
+  linkName.value="";
+  linkUrl.value="";
+  render();
+}
+
+function saveFile(){
+  let file=fileInput.files[0];
+  if(!file)return alert("Choose a file first!");
+
+  if(file.size > 3*1024*1024){
+    alert("File is too big! Maximum 3MB.");
+    return;
+  }
+
+  let reader=new FileReader();
+
+  reader.onload=function(){
+    files.push({
+      id:Date.now(),
+      name:file.name,
+      data:reader.result
+    });
+
+    try{
+      save();
+    }catch(e){
+      files.pop();
+      alert("Storage full! Delete some files.");
+      return;
+    }
+
+    fileInput.value="";
+    render();
+    alert("File uploaded!");
+  };
+
+  reader.readAsDataURL(file);
+}
+
+function deleteLink(id){
+  if(!confirm("Delete this link?"))return;
+  links=links.filter(x=>x.id!==id);
+  save();
+  render();
+}
+
+function deleteFile(id){
+  if(!confirm("Delete this file?"))return;
+  files=files.filter(x=>x.id!==id);
+  save();
+  render();
+}
+
+function downloadFile(id){
+  let f=files.find(x=>x.id===id);
+  if(!f)return;
+
+  let a=document.createElement("a");
+  a.href=f.data;
+  a.download=f.name;
+  a.click();
+}
+
+function render(){
+  let q=search.value.toLowerCase();
+  let html="";
+
+  links.forEach(x=>{
+    if((x.name+x.url).toLowerCase().includes(q)){
+      html+=`
+      <div class="card">
+        <h3>🔗 ${escapeHTML(x.name)}</h3>
+        <a href="${escapeHTML(x.url)}" target="_blank" rel="noopener">
+        Open Link ↗</a>
+        <br><br>
+        <button class="delete" onclick="deleteLink(${x.id})">Delete</button>
+      </div>`;
+    }
+  });
+
+  files.forEach(x=>{
+    if(x.name.toLowerCase().includes(q)){
+      html+=`
+      <div class="card">
+        <h3>📁 ${escapeHTML(x.name)}</h3>
+        <button onclick="downloadFile(${x.id})">Download</button>
+        <button class="delete" onclick="deleteFile(${x.id})">Delete</button>
+      </div>`;
+    }
+  });
+
+  grid.innerHTML=html||'<div class="empty">No links or files yet.</div>';
+}
+
+function escapeHTML(s){
+  return String(s).replace(/[&<>"']/g,c=>({
+    "&":"&amp;","<":"&lt;",">":"&gt;",
+    '"':"&quot;","'":"&#39;"
+  }[c]));
+}
+</script>
+</body>
+</html>
